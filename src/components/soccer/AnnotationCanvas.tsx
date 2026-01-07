@@ -22,6 +22,8 @@ interface AnnotationCanvasProps {
   calibrationPoints: CalibrationPoint[];
   homographyMatrix: number[][] | null;
   calculateDistance?: (x1: number, y1: number, x2: number, y2: number) => Promise<number>;
+  strokeWidth?: number;
+  trailType?: 'trace' | 'future';
 }
 
 // ============= HOMOGRAPHY TRANSFORMATION HELPERS =============
@@ -471,8 +473,7 @@ const createPerspectiveSpotlight = (
 };
 
 /**
- * Create perspective-correct player marker:
- * Size based on field position projection
+ * Create perspective-correct player marker with ring outline (like in reference image)
  */
 const createPerspectivePlayerMarker = (
   videoX: number,
@@ -480,74 +481,64 @@ const createPerspectivePlayerMarker = (
   playerNumber: string,
   color: string,
   H: number[][] | null,
-  baseRadiusMeters: number = 0.5 // Player circle ~0.5m radius
+  baseRadiusMeters: number = 0.8, // Player ring ~0.8m radius
+  showRing: boolean = true,
+  ringColor: string = '#000000'
 ): Group => {
-  if (!H) {
-    const scale = 0.5 + (videoY / 600) * 0.5;
-    const radius = 15 * scale;
-    
-    const playerCircle = new Circle({
-      radius,
-      fill: color,
-      stroke: '#ffffff',
+  let scale = 0.5 + (videoY / 600) * 0.5;
+  let visualRadius = 20 * scale;
+
+  if (H) {
+    const invH = invertHomography(H);
+    if (invH) {
+      const fieldCenter = videoToField(videoX, videoY, H);
+      if (fieldCenter) {
+        const testPoint = fieldToVideo(fieldCenter.x + baseRadiusMeters, fieldCenter.y, invH);
+        if (testPoint) {
+          visualRadius = Math.max(12, Math.min(40, Math.abs(testPoint.x - videoX)));
+          scale = visualRadius / 20;
+        }
+      }
+    }
+  }
+
+  const elements: FabricObject[] = [];
+
+  // Outer ring (black circle outline like in reference)
+  if (showRing) {
+    const outerRing = new Circle({
+      radius: visualRadius,
+      fill: 'transparent',
+      stroke: ringColor,
+      strokeWidth: 3 * scale,
+      originX: 'center',
+      originY: 'center',
+    });
+    elements.push(outerRing);
+
+    // Inner highlight ring
+    const innerRing = new Circle({
+      radius: visualRadius * 0.85,
+      fill: 'transparent',
+      stroke: `${ringColor}66`,
       strokeWidth: 2 * scale,
       originX: 'center',
       originY: 'center',
     });
-
-    const playerText = new FabricText(playerNumber, {
-      fontSize: 14 * scale,
-      fill: '#ffffff',
-      fontWeight: 'bold',
-      originX: 'center',
-      originY: 'center',
-    });
-
-    return new Group([playerCircle, playerText], {
-      left: videoX,
-      top: videoY,
-      originX: 'center',
-      originY: 'center',
-    });
+    elements.push(innerRing);
   }
 
-  const invH = invertHomography(H);
-  if (!invH) {
-    return createPerspectivePlayerMarker(videoX, videoY, playerNumber, color, null);
-  }
-
-  const fieldCenter = videoToField(videoX, videoY, H);
-  if (!fieldCenter) {
-    return createPerspectivePlayerMarker(videoX, videoY, playerNumber, color, null);
-  }
-
-  // Calculate visual size by projecting a small circle on field
-  const testPoint = fieldToVideo(fieldCenter.x + baseRadiusMeters, fieldCenter.y, invH);
-  if (!testPoint) {
-    return createPerspectivePlayerMarker(videoX, videoY, playerNumber, color, null);
-  }
-
-  const visualRadius = Math.max(8, Math.min(25, Math.abs(testPoint.x - videoX)));
-  const scale = visualRadius / 15;
-
-  const playerCircle = new Circle({
-    radius: visualRadius,
+  // Small colored dot in center (optional, for team identification)
+  const centerDot = new Circle({
+    radius: visualRadius * 0.2,
     fill: color,
-    stroke: '#ffffff',
-    strokeWidth: 2 * scale,
+    stroke: 'transparent',
     originX: 'center',
     originY: 'center',
   });
+  elements.push(centerDot);
 
-  const playerText = new FabricText(playerNumber, {
-    fontSize: Math.max(8, 14 * scale),
-    fill: '#ffffff',
-    fontWeight: 'bold',
-    originX: 'center',
-    originY: 'center',
-  });
-
-  return new Group([playerCircle, playerText], {
+  return new Group(elements, {
     left: videoX,
     top: videoY,
     originX: 'center',
@@ -555,6 +546,94 @@ const createPerspectivePlayerMarker = (
   });
 };
 
+/**
+ * Create player marker with full label (number, name, speed)
+ */
+const createPlayerWithLabel = (
+  videoX: number,
+  videoY: number,
+  playerNumber: string,
+  playerName: string,
+  color: string,
+  H: number[][] | null,
+  speed?: number
+): Group => {
+  let scale = 0.5 + (videoY / 600) * 0.5;
+  let visualRadius = 20 * scale;
+
+  if (H) {
+    const invH = invertHomography(H);
+    if (invH) {
+      const fieldCenter = videoToField(videoX, videoY, H);
+      if (fieldCenter) {
+        const testPoint = fieldToVideo(fieldCenter.x + 0.8, fieldCenter.y, invH);
+        if (testPoint) {
+          visualRadius = Math.max(12, Math.min(40, Math.abs(testPoint.x - videoX)));
+          scale = visualRadius / 20;
+        }
+      }
+    }
+  }
+
+  const elements: FabricObject[] = [];
+
+  // Player ring
+  const ring = new Circle({
+    radius: visualRadius,
+    fill: 'transparent',
+    stroke: '#000000',
+    strokeWidth: 3 * scale,
+    originX: 'center',
+    originY: 'center',
+  });
+  elements.push(ring);
+
+  // Label background
+  const labelWidth = 80 * scale;
+  const labelHeight = speed !== undefined ? 32 * scale : 22 * scale;
+  const labelY = visualRadius + 8 * scale;
+
+  const labelBg = new Rect({
+    left: -labelWidth / 2,
+    top: labelY,
+    width: labelWidth,
+    height: labelHeight,
+    fill: 'rgba(0,0,0,0.85)',
+    rx: 4 * scale,
+    ry: 4 * scale,
+  });
+  elements.push(labelBg);
+
+  // Player number and name
+  const nameText = new FabricText(`${playerNumber}  ${playerName}`, {
+    left: 0,
+    top: labelY + 5 * scale,
+    fontSize: 10 * scale,
+    fill: '#ffffff',
+    fontWeight: 'bold',
+    originX: 'center',
+  });
+  elements.push(nameText);
+
+  // Speed if available
+  if (speed !== undefined) {
+    const speedText = new FabricText(`${speed.toFixed(1)} km/h`, {
+      left: 0,
+      top: labelY + 18 * scale,
+      fontSize: 8 * scale,
+      fill: '#9ca3af',
+      originX: 'center',
+    });
+    elements.push(speedText);
+  }
+
+  return new Group(elements, {
+    left: videoX,
+    top: videoY,
+    originX: 'center',
+    originY: 'center',
+  });
+};
 /**
  * Create perspective-correct arrow:
  * Project start and end to field, then back to video
