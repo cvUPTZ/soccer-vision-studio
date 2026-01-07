@@ -56,7 +56,7 @@ export const PitchDiagram: React.FC<PitchDiagramProps> = ({
   };
 
   const handleClick = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (!onPitchClick || !calibrationMode) return;
+    if (!onPitchClick) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * PITCH_WIDTH;
     const y = ((e.clientY - rect.top) / rect.height) * PITCH_HEIGHT;
@@ -70,12 +70,21 @@ export const PitchDiagram: React.FC<PitchDiagramProps> = ({
 
   return (
     <div className="bg-card rounded-lg border border-border p-4">
-      <h3 className="text-sm font-semibold mb-2 text-foreground">2D Tactical View (Bird's Eye)</h3>
-      <svg
-        viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
-        className="w-full bg-emerald-600 rounded cursor-crosshair"
-        onClick={handleClick}
-      >
+      <h3 className="text-sm font-semibold mb-2 text-foreground">
+        {calibrationMode ? '2D Pitch - Click to set calibration point' : '2D Tactical View (Bird\'s Eye)'}
+      </h3>
+      <div className="relative">
+        {/* Coordinate display for calibration */}
+        {calibrationMode && (
+          <div className="absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded z-10">
+            Click anywhere on pitch (105m × 68m)
+          </div>
+        )}
+        <svg
+          viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
+          className={`w-full bg-emerald-600 rounded ${calibrationMode ? 'cursor-crosshair ring-2 ring-primary' : 'cursor-default'}`}
+          onClick={calibrationMode ? handleClick : undefined}
+        >
         {/* Pitch outline */}
         <rect x="2" y="2" width={SVG_WIDTH - 4} height={SVG_HEIGHT - 4} fill="none" stroke="white" strokeWidth="2" />
         
@@ -106,36 +115,21 @@ export const PitchDiagram: React.FC<PitchDiagramProps> = ({
         {/* Right penalty spot */}
         <circle cx={SVG_WIDTH - toSvgX(11)} cy={SVG_HEIGHT / 2} r="3" fill="white" />
 
-        {/* Calibration reference points */}
+        {/* Calibration reference points - shown as guides */}
         {calibrationMode && PITCH_REFERENCE_POINTS.map((point, index) => {
-          const isUsed = calibrationPoints.some(cp => cp.pitchX === point.x && cp.pitchY === point.y);
-          const isSelected = selectedCalibrationIndex !== undefined && 
-            calibrationPoints[selectedCalibrationIndex]?.pitchX === point.x &&
-            calibrationPoints[selectedCalibrationIndex]?.pitchY === point.y;
+          const isUsed = calibrationPoints.some(cp => 
+            Math.abs(cp.pitchX - point.x) < 2 && Math.abs(cp.pitchY - point.y) < 2
+          );
           
           return (
-            <g key={index}>
+            <g key={`ref-${index}`} className="pointer-events-none opacity-50">
               <circle
                 cx={toSvgX(point.x)}
                 cy={toSvgY(point.y)}
-                r="8"
-                fill={isUsed ? '#22c55e' : isSelected ? '#eab308' : '#3b82f6'}
-                stroke="white"
-                strokeWidth="2"
-                className="cursor-pointer hover:opacity-80"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPitchClick?.(point.x, point.y);
-                }}
+                r="5"
+                fill={isUsed ? '#22c55e' : '#ffffff'}
+                stroke="none"
               />
-              <text
-                x={toSvgX(point.x)}
-                y={toSvgY(point.y) - 12}
-                textAnchor="middle"
-                className="text-[10px] fill-white font-medium"
-              >
-                {index + 1}
-              </text>
             </g>
           );
         })}
@@ -261,11 +255,32 @@ export const PitchDiagram: React.FC<PitchDiagramProps> = ({
             </g>
           );
         })}
+        {/* Calibration points already set */}
+        {calibrationMode && calibrationPoints.map((cp, index) => (
+          <g key={`cal-${index}`}>
+            <circle
+              cx={toSvgX(cp.pitchX)}
+              cy={toSvgY(cp.pitchY)}
+              r="6"
+              fill="#22c55e"
+              stroke="white"
+              strokeWidth="2"
+            />
+            <text
+              x={toSvgX(cp.pitchX) + 10}
+              y={toSvgY(cp.pitchY) + 4}
+              className="text-[10px] fill-white font-bold"
+            >
+              #{index + 1}
+            </text>
+          </g>
+        ))}
       </svg>
+      </div>
       
       {calibrationMode && (
         <p className="text-xs text-muted-foreground mt-2">
-          Click on reference points to set their video positions
+          1. Click on video to mark a point → 2. Click corresponding location on this pitch
         </p>
       )}
       
