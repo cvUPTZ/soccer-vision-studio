@@ -14,7 +14,8 @@ import {
   Trash2,
   Download,
   Undo,
-  Redo
+  Redo,
+  Lightbulb
 } from 'lucide-react';
 import type { AnnotationTool } from '@/types/annotation';
 import { cn } from '@/lib/utils';
@@ -42,6 +43,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
     { id: 'select', icon: <MousePointer className="h-4 w-4" />, label: 'Select' },
     { id: 'calibrate', icon: <Grid3X3 className="h-4 w-4" />, label: 'Calibrate' },
     { id: 'player', icon: <User className="h-4 w-4" />, label: 'Player Marker' },
+    { id: 'spotlight', icon: <Lightbulb className="h-4 w-4" />, label: 'Cylinder Spotlight' },
     { id: 'distance', icon: <Ruler className="h-4 w-4" />, label: 'Distance', requiresCalibration: true },
     { id: 'trail', icon: <MoveRight className="h-4 w-4" />, label: 'Movement Trail' },
     { id: 'arrow', icon: <ArrowRight className="h-4 w-4" />, label: 'Arrow' },

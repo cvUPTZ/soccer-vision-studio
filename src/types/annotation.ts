@@ -1,6 +1,7 @@
 export type AnnotationTool = 
   | 'select' 
   | 'player' 
+  | 'spotlight'
   | 'distance' 
   | 'trail' 
   | 'arrow' 
@@ -8,6 +9,15 @@ export type AnnotationTool =
   | 'circle' 
   | 'freehand'
   | 'calibrate';
+
+export interface SpotlightMarker {
+  id: string;
+  x: number;
+  y: number;
+  color: string;
+  radius: number;
+  height: number;
+}
 
 export interface PlayerMarker {
   id: string;

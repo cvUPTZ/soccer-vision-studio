@@ -203,6 +203,7 @@ export const SoccerAnalyzer: React.FC = () => {
                 onPlayerAdd={handlePlayerAdd}
                 onDistanceAdd={addDistance}
                 onTrailAdd={addTrail}
+                onSpotlightAdd={(spotlight) => console.log('Spotlight added:', spotlight)}
                 onCalibrationPointAdd={handleCalibrationPointFromVideo}
                 calibrationPoints={calibrationPoints}
                 homographyMatrix={homographyMatrix}

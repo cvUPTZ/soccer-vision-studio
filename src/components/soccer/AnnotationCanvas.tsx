@@ -17,6 +17,7 @@ interface AnnotationCanvasProps {
   onPlayerAdd: (player: PlayerMarker) => void;
   onDistanceAdd: (distance: DistanceMeasurement) => void;
   onTrailAdd: (trail: MovementTrail) => void;
+  onSpotlightAdd: (spotlight: { id: string; x: number; y: number; color: string }) => void;
   onCalibrationPointAdd: (point: { videoX: number; videoY: number }) => void;
   calibrationPoints: CalibrationPoint[];
   homographyMatrix: number[][] | null;
@@ -32,6 +33,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   onPlayerAdd,
   onDistanceAdd,
   onTrailAdd,
+  onSpotlightAdd,
   onCalibrationPointAdd,
   calibrationPoints,
   homographyMatrix,
@@ -83,6 +85,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
     const cursorMap: Record<AnnotationTool, string> = {
       select: 'default',
       player: 'crosshair',
+      spotlight: 'crosshair',
       distance: 'crosshair',
       trail: 'crosshair',
       arrow: 'crosshair',
@@ -197,6 +200,77 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
           onPlayerAdd(player);
           setPlayerCounter((prev) => prev + 1);
           setIsHomeTeam((prev) => !prev);
+          break;
+        }
+
+        case 'spotlight': {
+          // Draw cylinder spotlight effect
+          const spotlightId = `spotlight-${Date.now()}`;
+          
+          // Create the spotlight visual - ellipse base with gradient
+          const baseRadius = 25;
+          const spotlightHeight = 70;
+          
+          // Bottom ellipse (base)
+          const baseEllipse = new Circle({
+            radius: baseRadius,
+            fill: 'transparent',
+            stroke: activeColor,
+            strokeWidth: 3,
+            originX: 'center',
+            originY: 'center',
+            scaleY: 0.4,
+          });
+          
+          // Create trapezoid sides using a path
+          const topRadius = baseRadius * 0.6;
+          const pathData = `
+            M ${-baseRadius} 0
+            L ${-topRadius} ${-spotlightHeight}
+            L ${topRadius} ${-spotlightHeight}
+            L ${baseRadius} 0
+            Z
+          `;
+          
+          const sides = new Path(pathData, {
+            fill: `${activeColor}22`,
+            stroke: activeColor,
+            strokeWidth: 2,
+            originX: 'center',
+            originY: 'bottom',
+          });
+          
+          // Top ellipse
+          const topEllipse = new Circle({
+            radius: topRadius,
+            fill: 'transparent',
+            stroke: activeColor,
+            strokeWidth: 2,
+            originX: 'center',
+            originY: 'center',
+            scaleY: 0.3,
+            top: -spotlightHeight,
+          });
+          
+          const spotlightGroup = new Group([sides, baseEllipse, topEllipse], {
+            left: pointer.x,
+            top: pointer.y,
+            originX: 'center',
+            originY: 'bottom',
+          });
+          (spotlightGroup as CustomFabricObject).data = { type: 'spotlight', id: spotlightId };
+          
+          canvas.add(spotlightGroup);
+          canvas.renderAll();
+          
+          onSpotlightAdd({
+            id: spotlightId,
+            x: pointer.x,
+            y: pointer.y,
+            color: activeColor,
+          });
+          
+          toast.success('Spotlight added');
           break;
         }
 
