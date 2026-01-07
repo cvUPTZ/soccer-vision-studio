@@ -222,10 +222,13 @@ export const SoccerAnalyzer: React.FC<SoccerAnalyzerProps> = ({
         <div className="w-80 space-y-4">
           <PitchDiagram
             players={players}
+            distances={distances}
+            trails={trails}
             calibrationPoints={calibrationPoints}
             calibrationMode={activeTool === 'calibrate'}
             onPitchClick={handlePitchClick}
             selectedCalibrationIndex={pendingVideoPoint ? calibrationPoints.length : undefined}
+            transformPoint={isCalibrated ? transformPoint : undefined}
           />
 
           {activeTool === 'calibrate' && (
