@@ -128,7 +128,8 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(
           <video
             ref={videoRef}
             src={src}
-            className="w-full aspect-video bg-black"
+            className="block bg-black"
+            style={{ width: '100%', height: 'auto' }}
             onClick={togglePlay}
           />
         </div>

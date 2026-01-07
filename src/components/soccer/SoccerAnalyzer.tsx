@@ -56,13 +56,15 @@ export const SoccerAnalyzer: React.FC = () => {
     reset: resetHomography,
   } = useHomography();
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  
   const handleVideoLoad = useCallback((duration: number, width: number, height: number) => {
-    // Scale to fit container while maintaining aspect ratio
-    const maxWidth = 900;
-    const scale = Math.min(1, maxWidth / width);
+    // Use actual container width for proper sizing
+    const containerWidth = containerRef.current?.offsetWidth || 800;
+    const aspectRatio = height / width;
     setVideoDimensions({
-      width: width * scale,
-      height: height * scale,
+      width: containerWidth,
+      height: containerWidth * aspectRatio,
     });
   }, []);
 
@@ -183,7 +185,7 @@ export const SoccerAnalyzer: React.FC = () => {
       <div className="flex gap-4 p-4">
         {/* Video Area */}
         <div className="flex-1 space-y-4">
-          <div className="relative" style={{ width: videoDimensions.width }}>
+          <div ref={containerRef} className="relative" style={{ maxWidth: 900 }}>
             <VideoPlayer
               ref={videoRef}
               src={videoSrc}
@@ -191,8 +193,12 @@ export const SoccerAnalyzer: React.FC = () => {
               onLoadedMetadata={handleVideoLoad}
             />
             <div 
-              className="absolute top-0 left-0" 
-              style={{ width: videoDimensions.width, height: videoDimensions.height }}
+              className="absolute top-0 left-0 pointer-events-none" 
+              style={{ 
+                width: videoDimensions.width, 
+                height: videoDimensions.height,
+                pointerEvents: 'auto'
+              }}
             >
               <AnnotationCanvas
                 width={videoDimensions.width}
