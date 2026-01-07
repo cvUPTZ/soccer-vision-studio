@@ -1,0 +1,4 @@
+project_id = "kuhlxxsreqahgnjencnz"
+
+[functions.homography]
+verify_jwt = false
