@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Canvas as FabricCanvas, Circle, Rect, Line, Path, Group, FabricText, Triangle, FabricObject } from 'fabric';
-import type { AnnotationTool, PlayerMarker, DistanceMeasurement, MovementTrail } from '@/types/annotation';
+import { Canvas as FabricCanvas, Circle, Rect, Line, Path, Group, FabricText, Triangle, FabricObject, TPointerEventInfo } from 'fabric';
+import type { AnnotationTool, PlayerMarker, DistanceMeasurement, MovementTrail, CalibrationPoint } from '@/types/annotation';
 import { toast } from 'sonner';
 
 // Extend FabricObject to include custom data
@@ -142,10 +142,10 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   }, [calibrationPoints]);
 
   const handleCanvasClick = useCallback(
-    async (e: { e: MouseEvent }) => {
+    async (e: TPointerEventInfo) => {
       if (!fabricRef.current) return;
       const canvas = fabricRef.current;
-      const pointer = canvas.getViewportPoint(e.e);
+      const pointer = canvas.getPointer(e.e);
 
       switch (activeTool) {
         case 'calibrate':
