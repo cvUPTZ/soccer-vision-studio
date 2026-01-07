@@ -76,94 +76,202 @@ const fieldToVideo = (
 
 // ============= PERSPECTIVE SHAPE CREATORS =============
 
+// Helper: parse hex color to RGB
+const hexToRgb = (hex: string) => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : { r: 0, g: 255, b: 0 };
+};
+
 /**
- * Create a player-sized ground ellipse (single click, flat on grass)
- * Uses ~1m diameter to represent a player's footprint on the field
+ * Create a 3D tactical zone (pitch-calibrated cylinder overlay like Metrica Play)
+ * Single click creates a perspective-correct cylinder/spotlight on the grass
  */
-const createPlayerSizedEllipse = (
+const createTacticalZone = (
   videoCenterX: number,
   videoCenterY: number,
   H: number[][] | null,
   color: string,
-  strokeWidth: number = 3,
-  canvasHeight: number = 600
-): Path | Circle => {
-  const PLAYER_DIAMETER_METERS = 1.0; // ~1m diameter for player footprint
+  strokeWidth: number = 2,
+  canvasHeight: number = 600,
+  zoneRadiusMeters: number = 3.0, // Default 3m tactical zone
+  cylinderHeightMeters: number = 4.0 // Visual height of cylinder
+): Group => {
+  const rgb = hexToRgb(color);
+  const numPoints = 48;
   
-  if (!H) {
-    // Fallback: simple perspective ellipse based on Y position
+  let baseVideoPoints: { x: number; y: number }[] = [];
+  let topVideoPoints: { x: number; y: number }[] = [];
+  let videoCenterXActual = videoCenterX;
+  let videoCenterYActual = videoCenterY;
+  
+  if (H) {
+    const invH = invertHomography(H);
+    if (invH) {
+      const fieldCenter = videoToField(videoCenterX, videoCenterY, H);
+      if (fieldCenter) {
+        // Create base circle on field plane
+        for (let i = 0; i < numPoints; i++) {
+          const angle = (i / numPoints) * Math.PI * 2;
+          const fieldX = fieldCenter.x + Math.cos(angle) * zoneRadiusMeters;
+          const fieldY = fieldCenter.y + Math.sin(angle) * zoneRadiusMeters;
+          const vp = fieldToVideo(fieldX, fieldY, invH);
+          if (vp) baseVideoPoints.push(vp);
+        }
+        
+        // Calculate visual height offset based on perspective
+        if (baseVideoPoints.length > 0) {
+          const avgBaseY = baseVideoPoints.reduce((s, p) => s + p.y, 0) / baseVideoPoints.length;
+          const perspectiveScale = Math.max(0.3, 1 - avgBaseY / canvasHeight);
+          const heightOffset = cylinderHeightMeters * 18 * perspectiveScale;
+          
+          // Top ellipse (smaller, offset upward)
+          const topScale = 0.65;
+          for (let i = 0; i < numPoints; i++) {
+            const angle = (i / numPoints) * Math.PI * 2;
+            const fieldX = fieldCenter.x + Math.cos(angle) * zoneRadiusMeters * topScale;
+            const fieldY = fieldCenter.y + Math.sin(angle) * zoneRadiusMeters * topScale;
+            const vp = fieldToVideo(fieldX, fieldY, invH);
+            if (vp) {
+              topVideoPoints.push({ x: vp.x, y: vp.y - heightOffset });
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // Fallback if no homography or failed transformation
+  if (baseVideoPoints.length < 8) {
+    baseVideoPoints = [];
+    topVideoPoints = [];
     const perspectiveScale = 0.3 + (videoCenterY / canvasHeight) * 0.7;
-    const baseRadius = 18 * perspectiveScale;
-    
-    // Create ellipse as a path for consistency
-    const numPoints = 32;
-    const points: { x: number; y: number }[] = [];
+    const baseRadius = 55 * perspectiveScale;
+    const heightOffset = 70 * perspectiveScale;
     
     for (let i = 0; i < numPoints; i++) {
       const angle = (i / numPoints) * Math.PI * 2;
-      const px = videoCenterX + Math.cos(angle) * baseRadius;
-      const py = videoCenterY + Math.sin(angle) * baseRadius * 0.5; // Flatten for perspective
-      points.push({ x: px, y: py });
+      baseVideoPoints.push({
+        x: videoCenterX + Math.cos(angle) * baseRadius,
+        y: videoCenterY + Math.sin(angle) * baseRadius * 0.4,
+      });
+      topVideoPoints.push({
+        x: videoCenterX + Math.cos(angle) * baseRadius * 0.65,
+        y: videoCenterY - heightOffset + Math.sin(angle) * baseRadius * 0.28,
+      });
     }
-    
-    let pathData = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 1; i < points.length; i++) {
-      pathData += ` L ${points[i].x} ${points[i].y}`;
-    }
-    pathData += ' Z';
-    
-    return new Path(pathData, {
-      fill: 'transparent',
-      stroke: color,
-      strokeWidth: strokeWidth,
-      selectable: true,
-    });
   }
-
-  const invH = invertHomography(H);
-  if (!invH) {
-    return createPlayerSizedEllipse(videoCenterX, videoCenterY, null, color, strokeWidth, canvasHeight);
-  }
-
-  // Transform center to field coordinates
-  const fieldCenter = videoToField(videoCenterX, videoCenterY, H);
-  if (!fieldCenter) {
-    return createPlayerSizedEllipse(videoCenterX, videoCenterY, null, color, strokeWidth, canvasHeight);
-  }
-
-  // Create a circle on the field plane (which becomes an ellipse in video due to perspective)
-  const fieldRadius = PLAYER_DIAMETER_METERS / 2;
-  const numPoints = 32;
-  const videoPoints: { x: number; y: number }[] = [];
   
-  for (let i = 0; i < numPoints; i++) {
-    const angle = (i / numPoints) * Math.PI * 2;
-    const fieldX = fieldCenter.x + Math.cos(angle) * fieldRadius;
-    const fieldY = fieldCenter.y + Math.sin(angle) * fieldRadius;
-    
-    // Project field point back to video
-    const videoPoint = fieldToVideo(fieldX, fieldY, invH);
-    if (videoPoint) {
-      videoPoints.push(videoPoint);
-    }
+  const objects: FabricObject[] = [];
+  
+  // Find left and right extremes
+  const leftIdx = baseVideoPoints.reduce((min, p, i, arr) => p.x < arr[min].x ? i : min, 0);
+  const rightIdx = baseVideoPoints.reduce((max, p, i, arr) => p.x > arr[max].x ? i : max, 0);
+  
+  // Create back cylinder face (behind the base ellipse)
+  let backPathData = `M ${baseVideoPoints[leftIdx].x} ${baseVideoPoints[leftIdx].y}`;
+  backPathData += ` L ${topVideoPoints[leftIdx].x} ${topVideoPoints[leftIdx].y}`;
+  for (let i = leftIdx + 1; i < numPoints; i++) {
+    backPathData += ` L ${topVideoPoints[i].x} ${topVideoPoints[i].y}`;
   }
-
-  if (videoPoints.length < 3) {
-    return createPlayerSizedEllipse(videoCenterX, videoCenterY, null, color, strokeWidth, canvasHeight);
+  backPathData += ` L ${topVideoPoints[0].x} ${topVideoPoints[0].y}`;
+  for (let i = 1; i <= rightIdx; i++) {
+    backPathData += ` L ${topVideoPoints[i].x} ${topVideoPoints[i].y}`;
   }
-
-  // Create closed path through points
-  let pathData = `M ${videoPoints[0].x} ${videoPoints[0].y}`;
-  for (let i = 1; i < videoPoints.length; i++) {
-    pathData += ` L ${videoPoints[i].x} ${videoPoints[i].y}`;
+  backPathData += ` L ${baseVideoPoints[rightIdx].x} ${baseVideoPoints[rightIdx].y}`;
+  for (let i = rightIdx - 1; i >= leftIdx; i--) {
+    backPathData += ` L ${baseVideoPoints[i].x} ${baseVideoPoints[i].y}`;
   }
-  pathData += ' Z';
-
-  return new Path(pathData, {
-    fill: 'transparent',
+  backPathData += ' Z';
+  
+  const backPath = new Path(backPathData, {
+    fill: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.12)`,
+    stroke: '',
+    strokeWidth: 0,
+    selectable: false,
+  });
+  objects.push(backPath);
+  
+  // Create front cylinder face
+  let frontPathData = `M ${baseVideoPoints[rightIdx].x} ${baseVideoPoints[rightIdx].y}`;
+  frontPathData += ` L ${topVideoPoints[rightIdx].x} ${topVideoPoints[rightIdx].y}`;
+  for (let i = rightIdx + 1; i < numPoints; i++) {
+    frontPathData += ` L ${topVideoPoints[i].x} ${topVideoPoints[i].y}`;
+  }
+  for (let i = 0; i <= leftIdx; i++) {
+    frontPathData += ` L ${topVideoPoints[i].x} ${topVideoPoints[i].y}`;
+  }
+  frontPathData += ` L ${baseVideoPoints[leftIdx].x} ${baseVideoPoints[leftIdx].y}`;
+  for (let i = leftIdx + 1; i <= rightIdx; i++) {
+    frontPathData += ` L ${baseVideoPoints[i].x} ${baseVideoPoints[i].y}`;
+  }
+  frontPathData += ' Z';
+  
+  const frontPath = new Path(frontPathData, {
+    fill: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.22)`,
+    stroke: '',
+    strokeWidth: 0,
+    selectable: false,
+  });
+  objects.push(frontPath);
+  
+  // Create base ellipse (ground circle - most visible)
+  let basePathData = `M ${baseVideoPoints[0].x} ${baseVideoPoints[0].y}`;
+  for (let i = 1; i < baseVideoPoints.length; i++) {
+    basePathData += ` L ${baseVideoPoints[i].x} ${baseVideoPoints[i].y}`;
+  }
+  basePathData += ' Z';
+  
+  const basePath = new Path(basePathData, {
+    fill: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.45)`,
     stroke: color,
+    strokeWidth: strokeWidth + 1,
+    selectable: false,
+  });
+  objects.push(basePath);
+  
+  // Create top ellipse
+  let topPathData = `M ${topVideoPoints[0].x} ${topVideoPoints[0].y}`;
+  for (let i = 1; i < topVideoPoints.length; i++) {
+    topPathData += ` L ${topVideoPoints[i].x} ${topVideoPoints[i].y}`;
+  }
+  topPathData += ' Z';
+  
+  const topPath = new Path(topPathData, {
+    fill: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.08)`,
+    stroke: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.5)`,
+    strokeWidth: 1,
+    selectable: false,
+  });
+  objects.push(topPath);
+  
+  // Create edge lines for 3D effect
+  const edgeStyle = {
+    stroke: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.6)`,
     strokeWidth: strokeWidth,
+    selectable: false,
+  };
+  
+  const leftEdge = new Path(
+    `M ${baseVideoPoints[leftIdx].x} ${baseVideoPoints[leftIdx].y} L ${topVideoPoints[leftIdx].x} ${topVideoPoints[leftIdx].y}`,
+    edgeStyle
+  );
+  objects.push(leftEdge);
+  
+  const rightEdge = new Path(
+    `M ${baseVideoPoints[rightIdx].x} ${baseVideoPoints[rightIdx].y} L ${topVideoPoints[rightIdx].x} ${topVideoPoints[rightIdx].y}`,
+    edgeStyle
+  );
+  objects.push(rightEdge);
+  
+  return new Group(objects, {
+    left: 0,
+    top: 0,
     selectable: true,
+    hasControls: true,
   });
 };
 
@@ -1229,18 +1337,18 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
         }
 
         case 'ellipse': {
-          // Single click: create player-sized ground ellipse
-          const ellipse = createPlayerSizedEllipse(
+          // Single click: create 3D tactical zone (Metrica Play style)
+          const tacticalZone = createTacticalZone(
             pointer.x,
             pointer.y,
             homographyMatrix,
             activeColor,
-            strokeWidth || 3,
+            strokeWidth || 2,
             height
           );
-          (ellipse as CustomFabricObject).data = { type: 'ground-ellipse' };
+          (tacticalZone as CustomFabricObject).data = { type: 'tactical-zone' };
 
-          canvas.add(ellipse);
+          canvas.add(tacticalZone);
           canvas.renderAll();
           break;
         }
