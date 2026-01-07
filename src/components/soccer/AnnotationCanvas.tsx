@@ -77,6 +77,107 @@ const fieldToVideo = (
 // ============= PERSPECTIVE SHAPE CREATORS =============
 
 /**
+ * Create a ground-level ellipse (flat on the grass surface)
+ * Takes center point and a second point to define the ellipse size/shape
+ * The ellipse is created in field space and projected back to video
+ */
+const createGroundEllipse = (
+  videoCenterX: number,
+  videoCenterY: number,
+  videoEdgeX: number,
+  videoEdgeY: number,
+  H: number[][] | null,
+  color: string,
+  strokeWidth: number = 3
+): Path | Circle => {
+  if (!H) {
+    // Fallback: simple perspective ellipse based on Y position
+    const scale = 0.4 + (videoCenterY / 600) * 0.6;
+    const radiusX = Math.abs(videoEdgeX - videoCenterX);
+    const radiusY = Math.abs(videoEdgeY - videoCenterY) * scale * 0.5; // Flatten for perspective
+    
+    // Create ellipse as a path
+    const numPoints = 48;
+    const points: { x: number; y: number }[] = [];
+    
+    for (let i = 0; i < numPoints; i++) {
+      const angle = (i / numPoints) * Math.PI * 2;
+      const px = videoCenterX + Math.cos(angle) * radiusX;
+      const py = videoCenterY + Math.sin(angle) * radiusY;
+      points.push({ x: px, y: py });
+    }
+    
+    let pathData = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length; i++) {
+      pathData += ` L ${points[i].x} ${points[i].y}`;
+    }
+    pathData += ' Z';
+    
+    return new Path(pathData, {
+      fill: 'transparent',
+      stroke: color,
+      strokeWidth: strokeWidth,
+      selectable: true,
+    });
+  }
+
+  const invH = invertHomography(H);
+  if (!invH) {
+    return createGroundEllipse(videoCenterX, videoCenterY, videoEdgeX, videoEdgeY, null, color, strokeWidth);
+  }
+
+  // Transform center and edge to field coordinates
+  const fieldCenter = videoToField(videoCenterX, videoCenterY, H);
+  const fieldEdge = videoToField(videoEdgeX, videoEdgeY, H);
+  
+  if (!fieldCenter || !fieldEdge) {
+    return createGroundEllipse(videoCenterX, videoCenterY, videoEdgeX, videoEdgeY, null, color, strokeWidth);
+  }
+
+  // Calculate ellipse radii in field space (meters)
+  const radiusX = Math.abs(fieldEdge.x - fieldCenter.x);
+  const radiusY = Math.abs(fieldEdge.y - fieldCenter.y);
+  
+  // Use the larger dimension if one is zero
+  const effectiveRadiusX = radiusX > 0.1 ? radiusX : Math.max(radiusX, radiusY);
+  const effectiveRadiusY = radiusY > 0.1 ? radiusY : Math.max(radiusX, radiusY);
+
+  // Generate ellipse points on the field plane
+  const numPoints = 64;
+  const videoPoints: { x: number; y: number }[] = [];
+  
+  for (let i = 0; i < numPoints; i++) {
+    const angle = (i / numPoints) * Math.PI * 2;
+    const fieldX = fieldCenter.x + Math.cos(angle) * effectiveRadiusX;
+    const fieldY = fieldCenter.y + Math.sin(angle) * effectiveRadiusY;
+    
+    // Project field point back to video
+    const videoPoint = fieldToVideo(fieldX, fieldY, invH);
+    if (videoPoint) {
+      videoPoints.push(videoPoint);
+    }
+  }
+
+  if (videoPoints.length < 3) {
+    return createGroundEllipse(videoCenterX, videoCenterY, videoEdgeX, videoEdgeY, null, color, strokeWidth);
+  }
+
+  // Create smooth curved path through points
+  let pathData = `M ${videoPoints[0].x} ${videoPoints[0].y}`;
+  for (let i = 1; i < videoPoints.length; i++) {
+    pathData += ` L ${videoPoints[i].x} ${videoPoints[i].y}`;
+  }
+  pathData += ' Z';
+
+  return new Path(pathData, {
+    fill: 'transparent',
+    stroke: color,
+    strokeWidth: strokeWidth,
+    selectable: true,
+  });
+};
+
+/**
  * Create a perspective-correct circle:
  * 1. User clicks at video position → transform to field coordinates
  * 2. Create circle points on the field plane (real meters)
@@ -772,6 +873,8 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   calibrationPoints,
   homographyMatrix,
   calculateDistance,
+  strokeWidth = 3,
+  trailType = 'trace',
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricRef = useRef<FabricCanvas | null>(null);
@@ -827,6 +930,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       arrow: 'crosshair',
       rectangle: 'crosshair',
       circle: 'crosshair',
+      ellipse: 'crosshair',
       freehand: 'crosshair',
       calibrate: 'crosshair',
     };
@@ -1133,6 +1237,34 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
           }
           break;
         }
+
+        case 'ellipse': {
+          if (!isDrawing) {
+            setIsDrawing(true);
+            setDrawingPoints([{ x: pointer.x, y: pointer.y }]);
+          } else {
+            const start = drawingPoints[0];
+            
+            const ellipse = createGroundEllipse(
+              start.x,
+              start.y,
+              pointer.x,
+              pointer.y,
+              homographyMatrix,
+              activeColor,
+              strokeWidth || 3
+            );
+            (ellipse as CustomFabricObject).data = { type: 'ground-ellipse' };
+
+            canvas.add(ellipse);
+            canvas.renderAll();
+
+            setIsDrawing(false);
+            setDrawingPoints([]);
+            toast.success('Ground ellipse added');
+          }
+          break;
+        }
       }
     },
     [
@@ -1150,6 +1282,7 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       calculateDistance,
       homographyMatrix,
       height,
+      strokeWidth,
     ]
   );
 
