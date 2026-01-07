@@ -7,6 +7,7 @@ export type AnnotationTool =
   | 'arrow' 
   | 'rectangle' 
   | 'circle' 
+  | 'ellipse'
   | 'freehand'
   | 'calibrate';
 

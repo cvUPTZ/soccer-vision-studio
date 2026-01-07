@@ -55,6 +55,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
     { id: 'arrow', icon: <ArrowRight className="h-4 w-4" />, label: 'Arrow' },
     { id: 'rectangle', icon: <Square className="h-4 w-4" />, label: 'Rectangle Zone' },
     { id: 'circle', icon: <Circle className="h-4 w-4" />, label: 'Circle Zone' },
+    { id: 'ellipse', icon: <Circle className="h-4 w-4 scale-x-150" />, label: 'Ground Ellipse' },
     { id: 'freehand', icon: <Pencil className="h-4 w-4" />, label: 'Freehand' },
   ];
 
