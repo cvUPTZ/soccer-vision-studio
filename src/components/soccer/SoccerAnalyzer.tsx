@@ -7,13 +7,16 @@ import { PitchDiagram, PITCH_REFERENCE_POINTS } from './PitchDiagram';
 import { CalibrationPanel } from './CalibrationPanel';
 import { ClipManager } from './ClipManager';
 import { VideoUploader } from './VideoUploader';
+import { AnnotationSettingsPanel } from './AnnotationSettingsPanel';
+import { ClipNameBadge } from './ClipNameBadge';
 import { useAnnotations } from '@/hooks/useAnnotations';
 import { useHomography } from '@/hooks/useHomography';
 import type { AnnotationTool } from '@/types/annotation';
 import { toast } from 'sonner';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Layers } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export const SoccerAnalyzer: React.FC = () => {
   const videoRef = useRef<VideoPlayerRef>(null);
@@ -23,6 +26,18 @@ export const SoccerAnalyzer: React.FC = () => {
   const [activeColor, setActiveColor] = useState('#ef4444');
   const [teamColors, setTeamColors] = useState({ home: '#ef4444', away: '#3b82f6' });
   const [currentTime, setCurrentTime] = useState(0);
+  
+  // Settings state
+  const [strokeWidth, setStrokeWidth] = useState(3);
+  const [showDistances, setShowDistances] = useState(true);
+  const [speedUnit, setSpeedUnit] = useState<'km/h' | 'mph'>('km/h');
+  const [autoplayClips, setAutoplayClips] = useState(false);
+  const [touchMode, setTouchMode] = useState(false);
+  const [resumePauseManually, setResumePauseManually] = useState(false);
+  const [showSettingsPanel, setShowSettingsPanel] = useState(true);
+  const [currentClipIndex, setCurrentClipIndex] = useState(1);
+  const [currentClipName, setCurrentClipName] = useState('Counterattack');
+  const [trailType, setTrailType] = useState<'trace' | 'future'>('trace');
 
   const {
     players,
@@ -178,6 +193,8 @@ export const SoccerAnalyzer: React.FC = () => {
           onRedo={redo}
           onExport={exportAnnotations}
           isCalibrated={isCalibrated}
+          trailType={trailType}
+          onTrailTypeChange={setTrailType}
         />
       </div>
 
@@ -214,8 +231,55 @@ export const SoccerAnalyzer: React.FC = () => {
                 calibrationPoints={calibrationPoints}
                 homographyMatrix={homographyMatrix}
                 calculateDistance={isCalibrated ? calculateDistance : undefined}
+                strokeWidth={strokeWidth}
+                trailType={trailType}
               />
             </div>
+            
+            {/* Clip Name Badge (bottom left) */}
+            {clips.length > 0 && (
+              <div className="absolute bottom-16 left-4 z-10">
+                <ClipNameBadge
+                  currentClipIndex={currentClipIndex}
+                  totalClips={clips.length}
+                  clipName={currentClipName}
+                  onNameChange={setCurrentClipName}
+                />
+              </div>
+            )}
+
+            {/* Floating Settings Panel (right side) */}
+            {showSettingsPanel && (
+              <div className="absolute top-4 right-4 w-48 z-20">
+                <AnnotationSettingsPanel
+                  strokeWidth={strokeWidth}
+                  onStrokeWidthChange={setStrokeWidth}
+                  showDistances={showDistances}
+                  onShowDistancesChange={setShowDistances}
+                  speedUnit={speedUnit}
+                  onSpeedUnitChange={setSpeedUnit}
+                  autoplayClips={autoplayClips}
+                  onAutoplayClipsChange={setAutoplayClips}
+                  touchMode={touchMode}
+                  onTouchModeChange={setTouchMode}
+                  resumePauseManually={resumePauseManually}
+                  onResumePauseManuallyChange={setResumePauseManually}
+                  onDeleteSelected={() => toast.info('Select an object first')}
+                  onUndo={undo}
+                />
+              </div>
+            )}
+
+            {/* Toggle Settings Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-4 right-4 z-10 bg-card/80 backdrop-blur"
+              onClick={() => setShowSettingsPanel(!showSettingsPanel)}
+              style={{ right: showSettingsPanel ? '13rem' : '1rem' }}
+            >
+              <Layers className="h-4 w-4" />
+            </Button>
           </div>
         </div>
 

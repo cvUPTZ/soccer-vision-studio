@@ -28,6 +28,9 @@ export interface PlayerMarker {
   teamColor: string;
   pitchX?: number;
   pitchY?: number;
+  speed?: number; // km/h
+  showRing?: boolean;
+  ringColor?: string;
 }
 
 export interface DistanceMeasurement {
@@ -44,6 +47,9 @@ export interface MovementTrail {
   points: { x: number; y: number }[];
   color: string;
   playerId?: string;
+  label?: string;
+  type?: 'trace' | 'future';
+  dashStyle?: 'solid' | 'dashed';
 }
 
 export interface CalibrationPoint {

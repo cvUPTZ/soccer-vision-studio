@@ -15,10 +15,12 @@ import {
   Download,
   Undo,
   Redo,
-  Lightbulb
+  Lightbulb,
+  TrendingUp
 } from 'lucide-react';
 import type { AnnotationTool } from '@/types/annotation';
 import { cn } from '@/lib/utils';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 interface AnnotationToolbarProps {
   activeTool: AnnotationTool;
@@ -28,6 +30,8 @@ interface AnnotationToolbarProps {
   onRedo: () => void;
   onExport: () => void;
   isCalibrated: boolean;
+  trailType?: 'trace' | 'future';
+  onTrailTypeChange?: (type: 'trace' | 'future') => void;
 }
 
 export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
@@ -38,6 +42,8 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   onRedo,
   onExport,
   isCalibrated,
+  trailType = 'trace',
+  onTrailTypeChange,
 }) => {
   const tools: { id: AnnotationTool; icon: React.ReactNode; label: string; requiresCalibration?: boolean }[] = [
     { id: 'select', icon: <MousePointer className="h-4 w-4" />, label: 'Select' },
@@ -45,7 +51,7 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
     { id: 'player', icon: <User className="h-4 w-4" />, label: 'Player Marker' },
     { id: 'spotlight', icon: <Lightbulb className="h-4 w-4" />, label: 'Cylinder Spotlight' },
     { id: 'distance', icon: <Ruler className="h-4 w-4" />, label: 'Distance', requiresCalibration: true },
-    { id: 'trail', icon: <MoveRight className="h-4 w-4" />, label: 'Movement Trail' },
+    { id: 'trail', icon: <MoveRight className="h-4 w-4" />, label: 'Trace Trail' },
     { id: 'arrow', icon: <ArrowRight className="h-4 w-4" />, label: 'Arrow' },
     { id: 'rectangle', icon: <Square className="h-4 w-4" />, label: 'Rectangle Zone' },
     { id: 'circle', icon: <Circle className="h-4 w-4" />, label: 'Circle Zone' },
@@ -70,6 +76,36 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
           {tool.icon}
         </Button>
       ))}
+      
+      {/* Trail Type Toggle (show when trail tool is active) */}
+      {activeTool === 'trail' && (
+        <>
+          <Separator orientation="vertical" className="h-6 mx-2" />
+          <ToggleGroup 
+            type="single" 
+            value={trailType}
+            onValueChange={(v) => v && onTrailTypeChange?.(v as 'trace' | 'future')}
+            className="gap-0"
+          >
+            <ToggleGroupItem 
+              value="trace" 
+              className="h-8 px-3 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+              title="Trace (past movement)"
+            >
+              <MoveRight className="h-3 w-3 mr-1" />
+              Trace
+            </ToggleGroupItem>
+            <ToggleGroupItem 
+              value="future" 
+              className="h-8 px-3 text-xs data-[state=on]:bg-orange-500 data-[state=on]:text-white"
+              title="Future (predicted movement)"
+            >
+              <TrendingUp className="h-3 w-3 mr-1" />
+              Future
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </>
+      )}
       
       <Separator orientation="vertical" className="h-6 mx-2" />
       
