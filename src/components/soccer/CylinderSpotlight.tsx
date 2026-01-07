@@ -148,7 +148,7 @@ function drawGlowSpotlight(
   intensity: number,
   time: number,
 ) {
-  const pulseIntensity = animate ? 0.85 + Math.sin(time * 0.003) * 0.15 : 1;
+  const pulseIntensity = time > 0 ? 0.85 + Math.sin(time * 0.003) * 0.15 : 1;
 
   // Outer glow layers
   for (let i = 3; i >= 0; i--) {
