@@ -15,13 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 
-interface SoccerAnalyzerProps {
-  pythonApiEndpoint?: string;
-}
-
-export const SoccerAnalyzer: React.FC<SoccerAnalyzerProps> = ({ 
-  pythonApiEndpoint 
-}) => {
+export const SoccerAnalyzer: React.FC = () => {
   const videoRef = useRef<VideoPlayerRef>(null);
   const [videoSrc, setVideoSrc] = useState<string>('');
   const [videoDimensions, setVideoDimensions] = useState({ width: 800, height: 450 });
@@ -60,7 +54,7 @@ export const SoccerAnalyzer: React.FC<SoccerAnalyzerProps> = ({
     transformPoint,
     calculateDistance,
     reset: resetHomography,
-  } = useHomography({ apiEndpoint: pythonApiEndpoint });
+  } = useHomography();
 
   const handleVideoLoad = useCallback((duration: number, width: number, height: number) => {
     // Scale to fit container while maintaining aspect ratio
@@ -250,16 +244,6 @@ export const SoccerAnalyzer: React.FC<SoccerAnalyzerProps> = ({
             onSeekToClip={handleSeekToClip}
           />
 
-          {pythonApiEndpoint && (
-            <div className="p-3 bg-card rounded-lg border border-border">
-              <Label className="text-xs text-muted-foreground">Python API</Label>
-              <Input
-                value={pythonApiEndpoint}
-                readOnly
-                className="mt-1 text-xs h-8"
-              />
-            </div>
-          )}
         </div>
       </div>
     </div>
