@@ -702,7 +702,13 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   const [isHomeTeam, setIsHomeTeam] = useState(true);
 
   useEffect(() => {
-    if (!canvasRef.current || fabricRef.current) return;
+    if (!canvasRef.current) return;
+    
+    // Dispose existing canvas if any
+    if (fabricRef.current) {
+      fabricRef.current.dispose();
+      fabricRef.current = null;
+    }
 
     const canvas = new FabricCanvas(canvasRef.current, {
       width,
@@ -717,12 +723,9 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       canvas.dispose();
       fabricRef.current = null;
     };
-  }, []);
+  }, [width, height]); // Recreate on dimension change
 
-  useEffect(() => {
-    if (!fabricRef.current) return;
-    fabricRef.current.setDimensions({ width, height });
-  }, [width, height]);
+  // Dimensions are now handled in the canvas creation effect
 
   useEffect(() => {
     if (!fabricRef.current) return;
@@ -1118,11 +1121,12 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
   }, [handleCanvasClick, handleDoubleClick]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="absolute top-0 left-0 pointer-events-auto"
-      style={{ width, height }}
-    />
+    <div style={{ width, height, position: 'relative' }}>
+      <canvas
+        ref={canvasRef}
+        style={{ position: 'absolute', top: 0, left: 0, width, height }}
+      />
+    </div>
   );
 };
 
