@@ -77,33 +77,32 @@ const fieldToVideo = (
 // ============= PERSPECTIVE SHAPE CREATORS =============
 
 /**
- * Create a ground-level ellipse (flat on the grass surface)
- * Takes center point and a second point to define the ellipse size/shape
- * The ellipse is created in field space and projected back to video
+ * Create a player-sized ground ellipse (single click, flat on grass)
+ * Uses ~1m diameter to represent a player's footprint on the field
  */
-const createGroundEllipse = (
+const createPlayerSizedEllipse = (
   videoCenterX: number,
   videoCenterY: number,
-  videoEdgeX: number,
-  videoEdgeY: number,
   H: number[][] | null,
   color: string,
-  strokeWidth: number = 3
+  strokeWidth: number = 3,
+  canvasHeight: number = 600
 ): Path | Circle => {
+  const PLAYER_DIAMETER_METERS = 1.0; // ~1m diameter for player footprint
+  
   if (!H) {
     // Fallback: simple perspective ellipse based on Y position
-    const scale = 0.4 + (videoCenterY / 600) * 0.6;
-    const radiusX = Math.abs(videoEdgeX - videoCenterX);
-    const radiusY = Math.abs(videoEdgeY - videoCenterY) * scale * 0.5; // Flatten for perspective
+    const perspectiveScale = 0.3 + (videoCenterY / canvasHeight) * 0.7;
+    const baseRadius = 18 * perspectiveScale;
     
-    // Create ellipse as a path
-    const numPoints = 48;
+    // Create ellipse as a path for consistency
+    const numPoints = 32;
     const points: { x: number; y: number }[] = [];
     
     for (let i = 0; i < numPoints; i++) {
       const angle = (i / numPoints) * Math.PI * 2;
-      const px = videoCenterX + Math.cos(angle) * radiusX;
-      const py = videoCenterY + Math.sin(angle) * radiusY;
+      const px = videoCenterX + Math.cos(angle) * baseRadius;
+      const py = videoCenterY + Math.sin(angle) * baseRadius * 0.5; // Flatten for perspective
       points.push({ x: px, y: py });
     }
     
@@ -123,33 +122,24 @@ const createGroundEllipse = (
 
   const invH = invertHomography(H);
   if (!invH) {
-    return createGroundEllipse(videoCenterX, videoCenterY, videoEdgeX, videoEdgeY, null, color, strokeWidth);
+    return createPlayerSizedEllipse(videoCenterX, videoCenterY, null, color, strokeWidth, canvasHeight);
   }
 
-  // Transform center and edge to field coordinates
+  // Transform center to field coordinates
   const fieldCenter = videoToField(videoCenterX, videoCenterY, H);
-  const fieldEdge = videoToField(videoEdgeX, videoEdgeY, H);
-  
-  if (!fieldCenter || !fieldEdge) {
-    return createGroundEllipse(videoCenterX, videoCenterY, videoEdgeX, videoEdgeY, null, color, strokeWidth);
+  if (!fieldCenter) {
+    return createPlayerSizedEllipse(videoCenterX, videoCenterY, null, color, strokeWidth, canvasHeight);
   }
 
-  // Calculate ellipse radii in field space (meters)
-  const radiusX = Math.abs(fieldEdge.x - fieldCenter.x);
-  const radiusY = Math.abs(fieldEdge.y - fieldCenter.y);
-  
-  // Use the larger dimension if one is zero
-  const effectiveRadiusX = radiusX > 0.1 ? radiusX : Math.max(radiusX, radiusY);
-  const effectiveRadiusY = radiusY > 0.1 ? radiusY : Math.max(radiusX, radiusY);
-
-  // Generate ellipse points on the field plane
-  const numPoints = 64;
+  // Create a circle on the field plane (which becomes an ellipse in video due to perspective)
+  const fieldRadius = PLAYER_DIAMETER_METERS / 2;
+  const numPoints = 32;
   const videoPoints: { x: number; y: number }[] = [];
   
   for (let i = 0; i < numPoints; i++) {
     const angle = (i / numPoints) * Math.PI * 2;
-    const fieldX = fieldCenter.x + Math.cos(angle) * effectiveRadiusX;
-    const fieldY = fieldCenter.y + Math.sin(angle) * effectiveRadiusY;
+    const fieldX = fieldCenter.x + Math.cos(angle) * fieldRadius;
+    const fieldY = fieldCenter.y + Math.sin(angle) * fieldRadius;
     
     // Project field point back to video
     const videoPoint = fieldToVideo(fieldX, fieldY, invH);
@@ -159,10 +149,10 @@ const createGroundEllipse = (
   }
 
   if (videoPoints.length < 3) {
-    return createGroundEllipse(videoCenterX, videoCenterY, videoEdgeX, videoEdgeY, null, color, strokeWidth);
+    return createPlayerSizedEllipse(videoCenterX, videoCenterY, null, color, strokeWidth, canvasHeight);
   }
 
-  // Create smooth curved path through points
+  // Create closed path through points
   let pathData = `M ${videoPoints[0].x} ${videoPoints[0].y}`;
   for (let i = 1; i < videoPoints.length; i++) {
     pathData += ` L ${videoPoints[i].x} ${videoPoints[i].y}`;
@@ -1239,30 +1229,19 @@ export const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
         }
 
         case 'ellipse': {
-          if (!isDrawing) {
-            setIsDrawing(true);
-            setDrawingPoints([{ x: pointer.x, y: pointer.y }]);
-          } else {
-            const start = drawingPoints[0];
-            
-            const ellipse = createGroundEllipse(
-              start.x,
-              start.y,
-              pointer.x,
-              pointer.y,
-              homographyMatrix,
-              activeColor,
-              strokeWidth || 3
-            );
-            (ellipse as CustomFabricObject).data = { type: 'ground-ellipse' };
+          // Single click: create player-sized ground ellipse
+          const ellipse = createPlayerSizedEllipse(
+            pointer.x,
+            pointer.y,
+            homographyMatrix,
+            activeColor,
+            strokeWidth || 3,
+            height
+          );
+          (ellipse as CustomFabricObject).data = { type: 'ground-ellipse' };
 
-            canvas.add(ellipse);
-            canvas.renderAll();
-
-            setIsDrawing(false);
-            setDrawingPoints([]);
-            toast.success('Ground ellipse added');
-          }
+          canvas.add(ellipse);
+          canvas.renderAll();
           break;
         }
       }
